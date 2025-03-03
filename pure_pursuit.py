@@ -186,7 +186,7 @@ class PurePursuit(Node):
                 if not PathPlanner.is_cell_in_bounds(self.map, cell):
                     continue
 
-                is_wall = not PathPlanner.is_cell_walkable(self.map, cell)
+                is_wall = not PathPlanner.is_cell_walkable(self.map, cell)   #is_walkable only check for bounds not walls need to check if cell = 100 or >50 or smth
                 if is_wall and distance < self.closest_distance:
                     self.closest_distance = distance
 
