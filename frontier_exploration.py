@@ -13,11 +13,13 @@ from path_planner import PathPlanner
 from frontier_search import FrontierSearch
 from nav_msgs.msg import OccupancyGrid, Path, GridCells, Odometry
 from geometry_msgs.msg import Pose, Point, Quaternion
+from std_msgs.msg import Bool
 from custom_interfaces.msg import FrontierList
 import rclpy.time
 import tf2_ros
 from tf_transformations import euler_from_quaternion
 from rclpy.qos import qos_profile_sensor_data
+from time import sleep
 
 
 class FrontierExploration(Node):
@@ -27,7 +29,6 @@ class FrontierExploration(Node):
 #Class constructor
 
         # Set if in debug mode
-        
         self.is_in_debug_mode = True
 
         # Publishers
@@ -37,7 +38,7 @@ class FrontierExploration(Node):
         self.frontier_cells_pub = self.create_publisher(GridCells, "/frontier_exploration/frontier_cells", 10)
         self.start_pub = self.create_publisher(GridCells, "/frontier_exploration/start", 10)
         self.goal_pub = self.create_publisher(GridCells, "/frontier_exploration/goal", 10)
-        self.cspace_pub = self.create_publisher(GridCells, "/cspace", 10)
+        self.cspace_pub = self.create_publisher(OccupancyGrid, "/cspace", 10)
         self.publisher_ = self.create_publisher(OccupancyGrid, 'cost_map', 10,)
 
         # Subscribers
@@ -53,20 +54,27 @@ class FrontierExploration(Node):
             self.update_map,
             qos_profile_sensor_data
         )
+        self.navsub = self.create_subscription(Bool,"/navigatingyesno",self.update_nav,10)
 
         self.tf_buffer = tf2_ros.Buffer()
         self.tf_listener = tf2_ros.TransformListener(self.tf_buffer, self)
         self.create_timer(2.0, self.check_transform)
 
 
-        self.lock = threading.Lock()
+        #self.lock = threading.Lock()
         self.pose = None
         self.map = None
+        self.is_navigating = Bool()
+        self.is_navigating.data = False
 
         self.NUM_EXPLORE_FAILS_BEFORE_FINISH = 30
         self.no_path_found_counter = 0
         self.no_frontiers_found_counter = 0
         self.is_finished_exploring = False
+
+        self.spin_thread = threading.Thread(target=rclpy.spin,args=(self,))
+        self.spin_thread.daemon = True
+        self.spin_thread.start()    
 
     def check_transform(self):
         if self.tf_buffer.can_transform("map", "odom", rclpy.time.Time()):
@@ -90,42 +98,20 @@ class FrontierExploration(Node):
                 orientation=Quaternion(x=rot.x, y=rot.y, z=rot.z, w=rot.w),
             )
 
+            #print(self.pose.position)
+
         except tf2_ros.TransformException or tf2_ros.LookupException:
             print("didnt work")
 
-
-
-
-    def update_odometry(self, msg: Union[Odometry, None] = None):
-        # Updates the current pose of the robot. Callback bound to subscriber
-
-        # transform_map_to_odom = self.tf_buffer.lookup_transform(
-        #     'map',
-        #     'odom',
-        #     rclpy.time.Time(),
-        #     timeout=Duration(seconds=1)
-        # )
-        # if self.tf_buffer.can_transform("map", "odom", rclpy.time.Time(), timeout=rclpy.duration.Duration(seconds=1.0)):
-        #     transform = self.tf_buffer.lookup_transform("map", "odom", rclpy.time.Time())
-        #     print("sucess")
-        # print('fail')
-        # transform_odom_to_base = self.tf_buffer.lookup_transform("odom", "base_footprint", rclpy.time.Time())
-        # transform_base_to_map = self.tf_buffer.transform(transform_odom_to_base, "map")
-        # trans = transform_base_to_map.transform.translation
-        # rot = transform_base_to_map.transform.rotation
-
-        # print("next step")
-        # self.pose = Pose(
-        #     position=Point(x=trans.x, y=trans.y),
-        #     orientation=Quaternion(x=rot.x, y=rot.y, z=rot.z, w=rot.w),
-        # )
-        return
 
     def update_map(self, msg: OccupancyGrid):
         #Updates the current map.
         #his method is a callback bound to a Subscriber.
         #param msg [OccupancyGrid] The current map information.
         self.map = msg
+
+    def update_nav(self,msg:Bool):
+        self.is_navigating = msg
 
     def save_map(self):
         # Get the path of the current package
@@ -219,7 +205,7 @@ class FrontierExploration(Node):
         # Calculate the C-space
         cspace, cspace_cells = PathPlanner.calc_cspace(self.map, self.is_in_debug_mode)
         # if cspace_cells is not None:
-        #     self.cspace_pub.publish(cspace_cells)
+        self.cspace_pub.publish(cspace)
 
         # Calculate the cost map
         cost_map = PathPlanner.calc_cost_map(self.map)
@@ -231,7 +217,10 @@ class FrontierExploration(Node):
 
         # Execute A* for every frontier
         lowest_cost = float("inf")
+        second_lowest_cost = float("inf")
         best_path = None
+        second_best_path = None
+
 
         # Check only the top frontiers in terms of size
         MAX_NUM_FRONTIERS_TO_CHECK = 8
@@ -241,6 +230,7 @@ class FrontierExploration(Node):
 
         starts = []
         goals = []
+        paths = []
 
         # Log how many frontiers are being explored
         self.get_logger().info(f"Exploring {len(top_frontiers)} frontiers")
@@ -249,11 +239,11 @@ class FrontierExploration(Node):
             # Get goal coordinates
             print("sent to planner")
             goal = PathPlanner.world_to_grid(self.map, frontier.centroid)
-            print("goal recieved")
             # Execute A*
             path, a_star_cost, start, goal = PathPlanner.a_star(
                 cspace, cost_map, start, goal
             )
+            print(path)
 
             # If in debug mode, append start and goal
             if self.is_in_debug_mode:
@@ -268,64 +258,111 @@ class FrontierExploration(Node):
                 FRONTIER_SIZE_COST_WEIGHT / frontier.size
             )
 
-            # Update best path
-            if cost < lowest_cost:
-                lowest_cost = cost
-                best_path = path
 
-        # If in debug mode, publish the start and goal
-        if self.is_in_debug_mode:
-            print("published start and goal")
-            print(starts, goals)
-            self.start_pub.publish(PathPlanner.get_grid_cells(self.map, starts))
-            self.goal_pub.publish(PathPlanner.get_grid_cells(self.map, goals))
+            paths.append(path)
+            print(paths)
+            #Update best path
+            # if cost < lowest_cost:
+            #     lowest_cost = cost
+            #     best_path = path
+                # if second_lowest_cost > lowest_cost and second_lowest_cost < cost:
+                #     second_best_path = path
+                #     second_lowest_cost = cost
+                # if cost > lowest_cost and cost 
+        try: 
 
-        # If a path was found, publish it
-        if best_path:
-            self.get_logger().info(f"Found best path with cost {lowest_cost}")
-            start = best_path[0]
-            print(best_path)
-            path = PathPlanner.path_to_message(self.map, best_path)   #converts best_path which is a list of tuples of coordinates into a ros path message
-            print("sent to planner")
-            self.pure_pursuit_pub.publish(path)
-            print("path published")
-            self.no_path_found_counter = 0
-        # If no path was found, check if finished exploring
-        else:
-            self.get_logger().info("No paths found")
-            self.no_path_found_counter += 1
-            self.check_if_finished_exploring()
+            if paths: 
+                for i in range(len(paths)):
+                    print('entered paths loop')
+                    best_path = paths[i]
+                        
+                    print("best path is", best_path)
+                    # If in debug mode, publish the start and goal
+                    if self.is_in_debug_mode:
+                        print("published start and goal")
+                        print(starts, goals)
+                        self.start_pub.publish(PathPlanner.get_grid_cells(self.map, starts))
+                        self.goal_pub.publish(PathPlanner.get_grid_cells(self.map, goals))
+
+                    # If a path was found, publish it
+                    if best_path:
+                        #self.get_logger().info(f"Found best path with cost {lowest_cost}")
+                        start = best_path[0]
+                        path = PathPlanner.path_to_message(self.map, best_path)   #converts best_path which is a list of tuples of coordinates into a ros path message
+                        self.pure_pursuit_pub.publish(path)
+                        print("path published")
+                        print(self.is_navigating)
+                        self.no_path_found_counter = 0
+                    # If no path was found, check if finished exploring
+
+                    sleep(1)
+                    print(self.is_navigating)
+
+                    while self.is_navigating.data == True:
+                        print("robot is moving FORWARDS")
+                        sleep(0.1) 
+                    print(self.is_navigating)
+                        
+                        
+                    best_path.reverse()
+
+                    print("returning back")
+                    print(best_path)
+                    path = PathPlanner.path_to_message(self.map, best_path)   #converts best_path which is a list of tuples of coordinates into a ros path message
+                    self.pure_pursuit_pub.publish(path)
+   
+
+                    sleep(1)
+
+                    while self.is_navigating == True:
+                        print("robot is moving IN REVERSE")
+                        
+
+            else:
+
+                self.get_logger().info("No paths found")
+                self.no_path_found_counter += 1
+                self.check_if_finished_exploring()
+        except Exception as e:
+            return
+
 
 
     def run(self):
         try:
-            print("im working")
-            while rclpy.ok():
-                # self.check_transform()
-                # if self.pose == None:
-                #     print('found issue')
-                # if self.pose != None:
-                #     print("lesgo?")
-                if self.pose is None or self.map is None:
-                    rclpy.spin_once(self)
-                    continue
-                # Get the start position of the robot
-                start = PathPlanner.world_to_grid(self.map, self.pose.position)
-                if start != None:
-                    print(start)
-                # Get frontiers
-                frontier_list, frontier_cells = FrontierSearch.search(self.map, start, self.is_in_debug_mode)
-
-                if frontier_list is None:
-                    rclpy.spin_once(self)
-                    continue
-
-            # Publish frontier cells if in debug mode
-                if self.is_in_debug_mode:
-                    self.frontier_cells_pub.publish(PathPlanner.get_grid_cells(self.map, frontier_cells))
+            # print("im working")
+            if self.is_navigating.data == True:
+                # print("robot is moving")
+                return
                 
-                self.explore_frontier(frontier_list)
-                rclpy.spin_once(self)
+            # self.check_transform()
+            # if self.pose == None:
+            #     print('found issue')
+            # if self.pose != None:
+            #     print("lesgo?")
+
+            if self.pose is None or self.map is None:
+                #rclpy.spin_once(self)
+                return
+            # Get the start position of the robot
+
+            start = PathPlanner.world_to_grid(self.map, self.pose.position)
+            if start != None:
+                print(start)
+            # Get frontiers
+            frontier_list, frontier_cells = FrontierSearch.search(self.map, start, self.is_in_debug_mode)
+
+            if frontier_list is None:
+                #rclpy.spin_once(self)
+                return
+            
+        # Publish frontier cells if in debug mode
+            if self.is_in_debug_mode:
+                self.frontier_cells_pub.publish(PathPlanner.get_grid_cells(self.map, frontier_cells))
+            
+            self.explore_frontier(frontier_list)
+            sleep(0.1)
+            # rclpy.spin_once(self)
         except KeyboardInterrupt:
             self.destroy_node()
             rclpy.shutdown()
@@ -334,7 +371,8 @@ class FrontierExploration(Node):
 if __name__ == "__main__":
     rclpy.init()
     frontier_explorer = FrontierExploration()
-    frontier_explorer.run()
+    while rclpy.ok():
+        frontier_explorer.run()
     #frontier_explorer.check_transform()
-    rclpy.spin(frontier_explorer)
+    # rclpy.spin(frontier_explorer)
 
