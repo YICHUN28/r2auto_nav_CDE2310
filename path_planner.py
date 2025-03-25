@@ -190,7 +190,7 @@ class PathPlanner(Node):
         neighbors = []
         for direction in directions:
             candidate = (p[0] + direction[0], p[1] + direction[1])
-            if not must_be_walkable or PathPlanner.is_cell_walkable(mapdata, candidate):
+            if PathPlanner.is_cell_walkable(mapdata, candidate):
                 distance = PathPlanner.euclidean_distance(direction, (0, 0))
                 neighbors.append((candidate, distance))
         return neighbors
@@ -444,15 +444,17 @@ class PathPlanner(Node):
         start: "tuple[int, int]",
         goal: "tuple[int, int]",
     ) -> "tuple[Union[list[tuple[int, int]], None], Union[float, None], tuple[int, int], tuple[int, int]]":
-        COST_MAP_WEIGHT = 20
+        COST_MAP_WEIGHT = 100
 
         # If the start cell is not walkable, get the first walkable neighbor instead
-        if not PathPlanner.is_cell_walkable(mapdata, start):
-            start = PathPlanner.get_first_walkable_neighbor(mapdata, start)
+
+        # if not PathPlanner.is_cell_walkable(mapdata, start):
+        #     start = PathPlanner.get_first_walkable_neighbor(mapdata, start)
 
         # Likewise, if the goal cell is not walkable, get the first walkable neighbor instead
-        if not PathPlanner.is_cell_walkable(mapdata, goal):
-            goal = PathPlanner.get_first_walkable_neighbor(mapdata, goal)
+        # if not PathPlanner.is_cell_walkable(mapdata, goal):
+        #     print("finding walkable neighbours")
+        #     goal = PathPlanner.get_first_walkable_neighbor(mapdata, goal)
 
         pq = PriorityQueue()
         pq.put(start, 0)
@@ -464,11 +466,16 @@ class PathPlanner(Node):
         came_from = {}
         came_from[start] = None
 
+        second_best_came_from = {}  # Store alternative paths
+        explored_nodes = set()
+
         while not pq.empty():
             current = pq.get()
 
             if current == goal:
                 break
+
+            explored_nodes.add(current)
 
             for neighbor, distance in PathPlanner.neighbors_and_distances_of_8(
                 mapdata, current
@@ -478,6 +485,10 @@ class PathPlanner(Node):
                     + COST_MAP_WEIGHT
                     * PathPlanner.get_cost_map_value(cost_map, neighbor)
                 )
+                if not PathPlanner.is_cell_walkable(mapdata, neighbor):
+                    print("finding walkable neighbours")
+                    neighbor = PathPlanner.get_first_walkable_neighbor(mapdata, neighbor)
+
                 new_cost = cost_so_far[current] + added_cost
                 if not neighbor in cost_so_far or new_cost < cost_so_far[neighbor]:
                     cost_so_far[neighbor] = new_cost
@@ -487,28 +498,61 @@ class PathPlanner(Node):
                     priority = new_cost + PathPlanner.euclidean_distance(neighbor, goal)
                     pq.put(neighbor, priority)
                     came_from[neighbor] = current
+                # elif neighbor not in second_best_came_from:
+                # # Store second-best path in case the first one fails
+                #     second_best_came_from[neighbor] = current
 
+        # print(came_from)
         path = []
+
+        # print(came_from)
+
+        if goal not in came_from:
+            def path_length(node, came_from):
+                """Calculate the number of steps from start to this node"""
+                length = 0
+                while node in came_from:
+                    node = came_from[node]
+                    length += 1
+                return length
+            # if goal in second_best_came_from:
+            #     print(f"Using second-best path for {goal}")
+            #     came_from = second_best_came_from
+            # else:
+            # Pick the closest explored node
+            #longest_path_node = max(came_from.keys(), key=lambda node: path_length(node, came_from))
+            best_node = max(
+                came_from.keys(), 
+                key=lambda node: (path_length(node, came_from), -math.dist(node, goal))
+                )
+
+
+            # closest_node = min(came_from, key=lambda node: math.dist(node, goal))
+            print(f"Goal not found in came_from! Using closest known node: {best_node}")
+            goal = best_node
+        #     while goal:
+        #         path.insert(0,goal)
+        # else:
         cell = goal
 
         while cell:
             path.insert(0, cell)
-
             if cell in came_from:
-                cell = came_from[cell]
+                cell = came_from.get(cell)
             else:
+                print('goal is not in the dictionary')
                 return (None, None, start, goal)
 
-        # Prevent paths that are too short
-        MIN_PATH_LENGTH = 12
-        if len(path) < MIN_PATH_LENGTH:
-            return (None, None, start, goal)
+            # Prevent paths that are too short
+            # MIN_PATH_LENGTH = 12
+            # if len(path) < MIN_PATH_LENGTH:
+            #     return (None, None, start, goal)
 
-        # Truncate the last few poses of the path
-        POSES_TO_TRUNCATE = 8
-        path = path[:-POSES_TO_TRUNCATE]
+            # # Truncate the last few poses of the path
+            # POSES_TO_TRUNCATE = 8
+            # path = path[:-POSES_TO_TRUNCATE]
 
-        return (path, distance_cost_so_far[goal], start, goal)
+        return (path, distance_cost_so_far.get(goal,100), start, goal)
 
     @staticmethod
     def path_to_message(mapdata: OccupancyGrid, path: "list[tuple[int, int]]") -> Path:
@@ -519,3 +563,4 @@ class PathPlanner(Node):
         """
         poses = PathPlanner.path_to_poses(mapdata, path)
         return Path(header=Header(frame_id="map"), poses=poses)
+    
