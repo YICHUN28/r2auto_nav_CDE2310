@@ -7,13 +7,13 @@ class MotorController:
         GPIO.setwarnings(False)
 
         # Servo Motor Pins (Software PWM)
-        self.servo1_pin = 12  # GPIO17 (change as needed)
+        self.servo1_pin = 12  # GPIO12 (change as needed)
         self.servo2_pin = 18  # GPIO18
 
         # L298N DC Motor Pins
-        self.ENA = 13  # PWM Speed Control (GPIO23)
+        self.ENA = 13  # PWM Speed Control (GPIO13)
         self.IN1 = 24  # Direction 1 (GPIO24)
-        self.IN2 = 23  # Direction 2 (GPIO25)
+        self.IN2 = 23  # Direction 2 (GPIO23)
 
         # Servo PWM Frequency (50Hz for standard servos)
         self.servo_pwm_freq = 50
@@ -35,8 +35,8 @@ class MotorController:
         self.initialize_motors()
 
     def initialize_motors(self):
-        self._set_servo_angle(self.servo1_pwm, 90)
-        self._set_servo_angle(self.servo2_pwm, 90)
+        self.servo1_pwm.start(7.5)
+        self.servo2_pwm.start(7.5)
         self._dc_motor_stop()
         time.sleep(1)  # Allow time for servos to move
 
@@ -64,27 +64,29 @@ class MotorController:
         if duration:
             time.sleep(duration) #The motor will run for exactly that many seconds
             self._dc_motor_stop()
-
-    def launch1(self):
-        self.servo1_pwm.ChangeDutyCycle(2.5)
+            
+    def stopper(self, servo_no):
+        if servo_no == 1:
+            servo_pwm = self.servo1_pwm
+        else:
+            servo_pwm = self.servo2_pwm
+        
+        servo_pwm.ChangeDutyCycle(2.5)
         time.sleep(1)
-        self.servo1_pwm.ChangeDutyCycle(7.5)
+        servo_pwm.ChangeDutyCycle(7.5)
         time.sleep(1)
-        # Rotate DC motor 1 full revolution (adjust duration based on motor speed)
-        self._dc_motor_rotate(direction=1, speed=50, duration=1)  # Forward
-        self._dc_motor_rotate(direction=-1, speed=50, duration=1)  # Back to start
-    
-    def launch2(self):
-        self.servo1_pwm.ChangeDutyCycle(2.5)
-        time.sleep(1)
-        self.servo1_pwm.ChangeDutyCycle(7.5)
-        time.sleep(1)
+        
+    def launch(self):
+        # launch_count = 0 and launch_count += 1 in the main control code
+        if launch_count < 3:
+            self.stopper(1)  
+        else:
+            self.stopper(2)
         # Rotate DC motor 1 full revolution (adjust duration based on motor speed)
         self._dc_motor_rotate(direction=1, speed=50, duration=1)  # Forward
         self._dc_motor_rotate(direction=-1, speed=50, duration=1)  # Back to start
 
     def cleanup(self):
-        """Clean up GPIO."""
         self.servo1_pwm.stop()
         self.servo2_pwm.stop()
         self.dc_motor_pwm.stop()
@@ -95,13 +97,7 @@ class MotorController:
 if __name__ == "__main__":       #With this line, the motor control code won't run on import.
     controller = MotorController()
     try:
-        launch_count = 0
-        while launch_count <=6:
-            if launch_count <=3:
-                controller.launch1()
-            else:
-                controller.launch2()
-            launch_count += 1
+        controller.launch()
     except KeyboardInterrupt:
         print("Program Interrupted")
     finally:
