@@ -77,7 +77,7 @@ class MotorController:
         time.sleep(1)
         
     def launch(self):
-        # launch_count = 0 and launch_count += 1 in the main control code
+        global launch_count   # a global variable in the main control code
         if launch_count < 3:
             self.stopper(1)  
         else:
@@ -97,6 +97,9 @@ class MotorController:
 if __name__ == "__main__":       #With this line, the motor control code won't run on import.
     controller = MotorController()
     try:
+        launch_count = 0
+        controller.launch()
+        launch_count = 3
         controller.launch()
     except KeyboardInterrupt:
         print("Program Interrupted")
