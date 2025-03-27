@@ -7,13 +7,13 @@ class MotorController:
         GPIO.setwarnings(False)
 
         # Servo Motor Pins (Software PWM)
-        self.servo1_pin = 17  # GPIO17 (change as needed)
+        self.servo1_pin = 12  # GPIO17 (change as needed)
         self.servo2_pin = 18  # GPIO18
 
         # L298N DC Motor Pins
-        self.ENA = 23  # PWM Speed Control (GPIO23)
+        self.ENA = 13  # PWM Speed Control (GPIO23)
         self.IN1 = 24  # Direction 1 (GPIO24)
-        self.IN2 = 25  # Direction 2 (GPIO25)
+        self.IN2 = 23  # Direction 2 (GPIO25)
 
         # Servo PWM Frequency (50Hz for standard servos)
         self.servo_pwm_freq = 50
@@ -35,16 +35,10 @@ class MotorController:
         self.initialize_motors()
 
     def initialize_motors(self):
-        """Set servos to 90° and stop DC motor."""
         self._set_servo_angle(self.servo1_pwm, 90)
         self._set_servo_angle(self.servo2_pwm, 90)
         self._dc_motor_stop()
         time.sleep(1)  # Allow time for servos to move
-
-    def _set_servo_angle(self, servo_pwm, angle):
-        """Convert angle (0-180°) to duty cycle (2.5%-12.5%)."""
-        duty_cycle = 2.5 + (angle / 18)  # 2.5% (0°), 7.5% (90°), 12.5% (180°)
-        servo_pwm.ChangeDutyCycle(duty_cycle)
 
     def _dc_motor_stop(self):
         """Stop DC motor (L298N)."""
@@ -62,27 +56,29 @@ class MotorController:
         if direction == 1:  # Forward
             GPIO.output(self.IN1, GPIO.HIGH)
             GPIO.output(self.IN2, GPIO.LOW)
-        else:  # Backward
+        else: 
             GPIO.output(self.IN1, GPIO.LOW)
             GPIO.output(self.IN2, GPIO.HIGH)
 
         self.dc_motor_pwm.ChangeDutyCycle(speed)
         if duration:
-            time.sleep(duration)
+            time.sleep(duration) #The motor will run for exactly that many seconds
             self._dc_motor_stop()
 
-    def servo_sequence(self, servo_num):
-        """Run sequence for selected servo (1 or 2)."""
-        servo_pwm = self.servo1_pwm if servo_num == 1 else self.servo2_pwm
-
-        # Move servo to 0°
-        self._set_servo_angle(servo_pwm, 0)
-        time.sleep(2)
-
-        # Return servo to 90°
-        self._set_servo_angle(servo_pwm, 90)
-        time.sleep(0.5)
-
+    def launch1(self):
+        self.servo1_pwm.ChangeDutyCycle(2.5)
+        time.sleep(1)
+        self.servo1_pwm.ChangeDutyCycle(7.5)
+        time.sleep(1)
+        # Rotate DC motor 1 full revolution (adjust duration based on motor speed)
+        self._dc_motor_rotate(direction=1, speed=50, duration=1)  # Forward
+        self._dc_motor_rotate(direction=-1, speed=50, duration=1)  # Back to start
+    
+    def launch2(self):
+        self.servo1_pwm.ChangeDutyCycle(2.5)
+        time.sleep(1)
+        self.servo1_pwm.ChangeDutyCycle(7.5)
+        time.sleep(1)
         # Rotate DC motor 1 full revolution (adjust duration based on motor speed)
         self._dc_motor_rotate(direction=1, speed=50, duration=1)  # Forward
         self._dc_motor_rotate(direction=-1, speed=50, duration=1)  # Back to start
@@ -96,15 +92,17 @@ class MotorController:
 
 
 # Example Usage
-if __name__ == "__main__":
+if __name__ == "__main__":       #With this line, the motor control code won't run on import.
     controller = MotorController()
     try:
-        print("Running sequence for Servo 1")
-        controller.servo_sequence(servo_num=1)
-        
-        time.sleep(1)
-        
-        print("Running sequence for Servo 2")
-        controller.servo_sequence(servo_num=2)
+        launch_count = 0
+        while launch_count <=6:
+            if launch_count <=3:
+                controller.launch1()
+            else:
+                controller.launch2()
+            launch_count += 1
+    except KeyboardInterrupt:
+        print("Program Interrupted")
     finally:
         controller.cleanup()
