@@ -1,11 +1,11 @@
-import smbus
+import smbus2
 import time
 
 class MLX90614:
     def __init__(self):
         # Temperature Sensor (MLX90614)
         self.temp_sensor_address = 0x5A
-        self.bus = smbus.SMBus(1)  # I2C bus 1
+        self.bus = smbus2.SMBus(1)  # I2C bus 1
         self.threshold = 40
     
     def read_temp(self):
