@@ -30,7 +30,7 @@ class MotorController:
         GPIO.setup(self.IN2, GPIO.OUT)
         self.dc_motor_pwm = GPIO.PWM(self.ENA, 1000)  # 1kHz PWM for L298N
         self.dc_motor_pwm.start(0)
-
+        
         # Set initial positions
         self.initialize_motors()
 
@@ -70,7 +70,6 @@ class MotorController:
             servo_pwm = self.servo1_pwm
         else:
             servo_pwm = self.servo2_pwm
-        
         servo_pwm.ChangeDutyCycle(2.5)
         time.sleep(1)
         servo_pwm.ChangeDutyCycle(7.5)
@@ -83,8 +82,11 @@ class MotorController:
         else:
             self.stopper(2)
         # Rotate DC motor 1 full revolution (adjust duration based on motor speed)
-        self._dc_motor_rotate(direction=1, speed=50, duration=1)  # Forward
-        self._dc_motor_rotate(direction=-1, speed=50, duration=1)  # Back to start
+        self._dc_motor_rotate(direction=1, speed=50, duration=0.8)
+        time.sleep(1)
+        self._dc_motor_rotate(direction=1, speed=50, duration=1.1)
+        time.sleep(1)
+        self._dc_motor_rotate(direction=-1, speed=50, duration=1.7)
 
     def cleanup(self):
         self.servo1_pwm.stop()
