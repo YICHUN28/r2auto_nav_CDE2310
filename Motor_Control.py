@@ -82,11 +82,10 @@ class MotorController:
         else:
             self.stopper(2)
         # Rotate DC motor 1 full revolution (adjust duration based on motor speed)
-        self._dc_motor_rotate(direction=1, speed=50, duration=0.8)
+        self._dc_motor_rotate(direction=1, speed=50, duration=0.87)
         time.sleep(1)
-        self._dc_motor_rotate(direction=1, speed=50, duration=1.1)
+        self._dc_motor_rotate(direction=1, speed=50, duration=0.82)
         time.sleep(1)
-        self._dc_motor_rotate(direction=-1, speed=50, duration=1.7)
 
     def cleanup(self):
         self.servo1_pwm.stop()
