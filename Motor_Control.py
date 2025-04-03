@@ -75,17 +75,36 @@ class MotorController:
         servo_pwm.ChangeDutyCycle(7.5)
         time.sleep(1)
         
-    def launch(self):
-        global launch_count   # a global variable in the main control code
-        if launch_count < 3:
-            self.stopper(1)  
-        else:
-            self.stopper(2)
-        # Rotate DC motor 1 full revolution (adjust duration based on motor speed)
+    def launch(self,stopper_no):
+        self.stopper(stopper_no)  
         self._dc_motor_rotate(direction=1, speed=50, duration=0.87)
         time.sleep(1)
         self._dc_motor_rotate(direction=1, speed=50, duration=0.82)
         time.sleep(1)
+
+    def launch_1(self):
+        time.sleep(2)
+        controller.launch(1)
+        time.sleep(4)
+        controller.launch(1)
+        time.sleep(2)
+        controller.launch(1)
+
+    def launch_2(self):
+        time.sleep(2)
+        controller.launch(1)
+        time.sleep(4)
+        controller.launch(1)
+        time.sleep(2)
+        controller.launch(2)
+        
+    def launch_3(self):
+        time.sleep(2)
+        controller.launch(2)
+        time.sleep(4)
+        controller.launch(2)
+        time.sleep(2)
+        controller.launch(2)
 
     def cleanup(self):
         self.servo1_pwm.stop()
@@ -98,10 +117,7 @@ class MotorController:
 if __name__ == "__main__":       #With this line, the motor control code won't run on import.
     controller = MotorController()
     try:
-        launch_count = 0
-        controller.launch()
-        launch_count = 3
-        controller.launch()
+        launch_1        
     except KeyboardInterrupt:
         print("Program Interrupted")
     finally:
