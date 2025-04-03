@@ -17,7 +17,7 @@ class Tempsens(Node):
         
         self.temppub = self.create_publisher(Float32, '/temp_pub',10)
         self.object_temp = Float32()
-        self.object_temp.data = 0.0
+        self.temp.data = 0.0
         
     def read_temperature(self,register):
         data = self.bus.read_i2c_block_data(self.MLX90614_ADDR, register,2)
