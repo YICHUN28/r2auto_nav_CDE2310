@@ -3,8 +3,11 @@ import time
 
 class MotorController:
     def __init__(self):
+        super().__init__("motorandtemp")
         GPIO.setmode(GPIO.BCM)
         GPIO.setwarnings(False)
+        self.ptoxsub = self.create_subscription(Bool,"proxcheck",self.proxchecker,10)
+        self.counter = 0
 
         # Servo Motor Pins (Software PWM)
         self.servo1_pin = 12  # GPIO12 (change as needed)
@@ -34,11 +37,47 @@ class MotorController:
         # Set initial positions
         self.initialize_motors()
 
+        self.initialize_MLX90614_ADDR = 0x5A
+        self.MLX90614_TA = 0x06
+        self.MLX90614_TOBJ1 = 0x07
+        self.bus = smbus2.SMBus(1)  # I2C bus 1
+
+        self.temppub = self.create_publisher(Float32, '/temp_pub',10)
+        self.object_temp = Float32()
+        self.object_temp.data = 0.0
+        self.prox = Bool()
+    
+    def read_temperature(self,register):
+        data = self.bus.read_i2c_block_data(self.MLX90614_ADDR, register,2)
+        raw_data = (data[1] << 8) + data[0]
+        temperature = (raw_data * 0.02) - 273.15
+        return temperature
+    def proxchecker(self,msg):
+        self.prox = msg
+        print(self.prox)
+        if self.prox.data:
+            self.mainlauncher()
+    def fn(self):
+        try:
+            while True:
+                ambient_temp = self.read_temperature(MLX90614_TA)
+                object_temp = self.read_temperature(MLX90614_TOBJ1)
+
+                self.object_temp.data = object_temp
+                print(f"Ambient Temp: {ambient_temp:.2f} degrees Celsius")
+                print(f"Object Temp: {object_temp:.2f} degrees Celsius")
+                print(f"\n")
+                self.temppub.publish(self,temp)
+                time.sleep(0.3)
+        except KeyboardInterrupt:
+            print("Exiting..")
+        finally:
+            GPIO.cleanup()
+
     def initialize_motors(self):
         self.servo1_pwm.start(7.5)
-        self.servo2_pwm.start(7.5)
+        self.servo2_pwm.start(12.5)
         self._dc_motor_stop()
-        time.sleep(1)  # Allow time for servos to move
 
     def _dc_motor_stop(self):
         """Stop DC motor (L298N)."""
@@ -59,8 +98,8 @@ class MotorController:
         else: 
             GPIO.output(self.IN1, GPIO.LOW)
             GPIO.output(self.IN2, GPIO.HIGH)
+        self.dc_motor_pwm.ChangeDutyCycle(100)
 
-        self.dc_motor_pwm.ChangeDutyCycle(speed)
         if duration:
             time.sleep(duration) #The motor will run for exactly that many seconds
             self._dc_motor_stop()
@@ -68,57 +107,82 @@ class MotorController:
     def stopper(self, servo_no):
         if servo_no == 1:
             servo_pwm = self.servo1_pwm
+            servo_pwm.ChangeDutyCycle(2.5)
+            time.sleep(0.3)
+            servo_pwm.ChangeDutyCycle(7.5)
+            time.sleep(0.3)
         else:
             servo_pwm = self.servo2_pwm
-        servo_pwm.ChangeDutyCycle(2.5)
-        time.sleep(1)
-        servo_pwm.ChangeDutyCycle(7.5)
-        time.sleep(1)
+            servo_pwm.ChangeDutyCycle(5.5)
+            time.sleep(0.3)
+            servo_pwm.ChangeDutyCycle(12.5)
+            time.sleep(0.3)
         
     def launch(self,stopper_no):
         self.stopper(stopper_no)  
-        self._dc_motor_rotate(direction=1, speed=50, duration=0.87)
-        time.sleep(1)
-        self._dc_motor_rotate(direction=1, speed=50, duration=0.82)
-        time.sleep(1)
+        time.sleep(0)
+        self._dc_motor_rotate(direction=1, speed=100, duration=1.11)
+        self._dc_motor_stop()
+        time.sleep(0.2)
+        self._dc_motor_rotate(direction=1, speed=100, duration=0.58)
 
     def launch_1(self):
-        time.sleep(2)
-        controller.launch(1)
-        time.sleep(4)
-        controller.launch(1)
-        time.sleep(2)
-        controller.launch(1)
+        self.counter = 1
+        time.sleep(0.1)
+        self.launch(1)
+        time.sleep(1)
+        self.launch(1)
+        time.sleep(0.1)
+        self.launch(1)
 
     def launch_2(self):
-        time.sleep(2)
-        controller.launch(1)
-        time.sleep(4)
-        controller.launch(1)
-        time.sleep(2)
-        controller.launch(2)
+        self.counter = 2
+        self.launch(1)
+        time.sleep(3)
+        self.launch(1)
+        time.sleep(1.7)
+        self.launch(2)
         
     def launch_3(self):
+        self.counter = 3
         time.sleep(2)
-        controller.launch(2)
+        self.launch(2)
         time.sleep(4)
-        controller.launch(2)
+        self.launch(2)
         time.sleep(2)
-        controller.launch(2)
-
+        self.launch(2)
+      
     def cleanup(self):
         self.servo1_pwm.stop()
         self.servo2_pwm.stop()
         self.dc_motor_pwm.stop()
         GPIO.cleanup()
-
+    
+    def mainlauncher(self):
+        if self.counter == 0:
+            print("missles away")
+            self.launch_1()
+            time.sleep(10)
+            return
+        elif self.counter == 1:
+            print("missles away second time")
+            self.launch_2()
+            time.sleep(10)
+            return
+        elif self.counter == 2:
+            print("wah bonus also")
+            self.launch_3()
+        elif self.counter == 3:
+            return
 
 # Example Usage
 if __name__ == "__main__":       #With this line, the motor control code won't run on import.
     controller = MotorController()
     try:
-        launch_1        
+        controller.fn()        
     except KeyboardInterrupt:
         print("Program Interrupted")
+        controller.destroy_node()
+        rclpy.shutdown()
     finally:
         controller.cleanup()
