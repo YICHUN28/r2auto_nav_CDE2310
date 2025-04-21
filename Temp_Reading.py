@@ -30,12 +30,12 @@ class Tempsens(Node):
                 ambient_temp = self.read_temperature(MLX90614_TA)
                 object_temp = self.read_temperature(MLX90614_TOBJ1)
 
-                self.temp.data = object_temp
+                self.object_temp.data = object_temp
                 print(f"Ambient Temp: {ambient_temp:.2f} degrees Celsius")
                 print(f"Object Temp: {object_temp:.2f} degrees Celsius")
                 print(f"\n")
-                self.temppub.publish(Self,temp)
-                time.sleep(0.5)
+                self.temppub.publish(self,temp)
+                time.sleep(0.3)
         except KeyboardInterrupt:
             print("Exiting..")
         finally:
