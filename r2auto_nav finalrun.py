@@ -455,8 +455,8 @@ class AutoNav(Node):
                 # Define left and right angle ranges
                 # Assuming laser_range[0] is straight ahead, and angles increase clockwise
                 # You may need to adjust these ranges based on your LIDAR configuration
-                left_angles = range(0, int(1/6*len(self.laser_range)))  # 0-90 degrees (left side)
-                right_angles = range(int(5/6*len(self.laser_range)), len(self.laser_range))  # 270-360 degrees (right side)
+                left_angles = range(0, int(1/6*len(self.laser_range)))  # 0 to 60
+                right_angles = range(int(5/6*len(self.laser_range)), len(self.laser_range))  # 300-360 degrees (right side)
                 
                 # Check if obstacle is on the left side
                 left_obstacle = np.any(self.laser_range[left_angles] < float(stop_distance))
@@ -467,25 +467,25 @@ class AutoNav(Node):
                 # Determine turn direction based on obstacle position
                 if left_obstacle and not right_obstacle:
                     # Obstacle on left, turn right (positive angle)
-                    turn_angle = -random.randint(10,30)  # Turn right 90 degrees
+                    turn_angle = -random.randint(10,20)  # Turn right 90 degrees
                     self.get_logger().info('Obstacle on left, turning right')
                 elif right_obstacle and not left_obstacle:
                     # Obstacle on right, turn left (negative angle)
-                    turn_angle = random.randint(10,30)  # Turn left 90 degrees
+                    turn_angle = random.randint(20,30)  # Turn left 90 degrees
                     self.get_logger().info('Obstacle on right, turning left')
                 elif left_obstacle and right_obstacle:
                     # Obstacles on both sides, find the clearest direction
                     # Compare average distances on left and right to decide
                     left_avg = np.nanmean(self.laser_range[left_angles])
                     right_avg = np.nanmean(self.laser_range[right_angles])
-                    turn_angle = 180
+                    # turn_angle = 180
                     
                     if left_avg > right_avg:
                         # Left has more space
                         turn_angle = 45  # Turn left 45 degrees
                         self.get_logger().info('Obstacles on both sides, more space on left')
                         twist = Twist()
-                        twist.linear.x = -0.05
+                        twist.linear.x = -0.05 #go backwards
                         twist.angular.z = 0.0
                         self.publisher_.publish(twist)
                         time.sleep(1.5)
@@ -496,7 +496,7 @@ class AutoNav(Node):
                         turn_angle = -45  # Turn right 45 degrees
                         self.get_logger().info('Obstacles on both sides, more space on right')
                         twist = Twist()
-                        twist.linear.x = -0.05
+                        twist.linear.x = -0.05 #go backwards 
                         twist.angular.z = 0.0
                         self.publisher_.publish(twist)
                         time.sleep(1)
