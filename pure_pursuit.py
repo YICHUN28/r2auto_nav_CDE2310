@@ -18,7 +18,6 @@ class Smth(Node):
         super().__init__("yawtrial")
         self.tf_buffer = tf2_ros.Buffer()
         self.tf_listener = tf2_ros.TransformListener(self.tf_buffer, self)
-
         self.create_timer(1.0, self.check_transform)
 
         self.odomsub = self.create_subscription(Odometry,"/odom",self.get_odom,10)
