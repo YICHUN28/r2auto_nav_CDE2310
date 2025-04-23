@@ -8,7 +8,6 @@ from std_msgs.msg import Float32
 class Tempsens(Node):
     def __init__(self):
         super().__init__("HeatSensor")
-        
         # Temperature Sensor (MLX90614)
         self.MLX90614_ADDR = 0x5A
         self.MLX90614_TA = 0x06
