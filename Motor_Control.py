@@ -1,6 +1,5 @@
 import RPi.GPIO as GPIO
 import time
-
 class MotorController:
     def __init__(self):
         super().__init__("motorandtemp")
